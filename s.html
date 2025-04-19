@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kick Stream Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        .stream-card {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .stream-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(74, 222, 128, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+            }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-bold mb-2">
+                <span class="text-emerald-400">Kick</span> Stream Checker
+            </h1>
+            <p class="text-gray-300 max-w-2xl mx-auto">
+                Track your favorite Kick streamers and automatically display the one with the highest viewership.
+            </p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column - Streamer Management -->
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-semibold">Manage Streamers</h2>
+                    <div class="text-sm bg-emerald-900 text-emerald-300 px-3 py-1 rounded-full flex items-center">
+                        <span id="status-indicator" class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                        <span id="status-text">Active</span>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <div class="flex mb-4">
+                        <input 
+                            type="text" 
+                            id="streamer-input" 
+                            placeholder="Enter streamer username" 
+                            class="flex-1 bg-slate-700 border border-slate-600 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                        <button 
+                            id="add-streamer-btn" 
+                            class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-r-lg transition-colors"
+                        >
+                            <i class="fas fa-plus mr-2"></i>Add
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-400">
+                        Add Kick streamers to track (e.g. "xqc", "trainwreckstv")
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="text-lg font-medium mb-3">Your Streamers</h3>
+                    <div id="streamer-list" class="space-y-2 max-h-64 overflow-y-auto pr-2">
+                        <!-- Streamers will be added here -->
+                        <div class="text-gray-400 italic" id="no-streamers-message">
+                            No streamers added yet. Add some to get started!
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <div>
+                        <label for="refresh-interval" class="block text-sm font-medium mb-1">Refresh Interval</label>
+                        <select 
+                            id="refresh-interval" 
+                            class="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                            <option value="5">5 minutes</option>
+                            <option value="15">15 minutes</option>
+                            <option value="30" selected>30 minutes</option>
+                            <option value="60">1 hour</option>
+                        </select>
+                    </div>
+                    <button 
+                        id="refresh-now-btn" 
+                        class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg transition-colors flex items-center"
+                    >
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh Now
+                    </button>
+                </div>
+            </div>
+
+            <!-- Middle Column - Current Stream Display -->
+            <div class="lg:col-span-2">
+                <div class="bg-slate-800 rounded-xl p-6 shadow-lg h-full">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-semibold">Currently Live</h2>
+                        <div id="last-updated" class="text-sm text-gray-400">
+                            Last updated: Just now
+                        </div>
+                    </div>
+
+                    <div id="current-stream-container" class="rounded-lg overflow-hidden">
+                        <div id="no-live-stream" class="bg-slate-900 rounded-lg p-8 text-center">
+                            <div class="text-gray-500 mb-4">
+                                <i class="fas fa-stream text-5xl"></i>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">No live streams</h3>
+                            <p class="text-gray-400">
+                                Add streamers to track and we'll show the most popular live stream here.
+                            </p>
+                        </div>
+
+                        <div id="live-stream-display" class="hidden">
+                            <div class="relative">
+                                <div class="aspect-w-16 aspect-h-9">
+                                    <iframe 
+                                        id="stream-embed" 
+                                        class="w-full h-[500px] rounded-lg" 
+                                        frameborder="0" 
+                                        allowfullscreen
+                                    ></iframe>
+                                </div>
+                                <div class="absolute top-4 left-4">
+                                    <span class="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center">
+                                        <span class="w-2 h-2 rounded-full bg-white mr-1"></span>
+                                        LIVE
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex justify-between items-start">
+                                <div>
+                                    <h3 id="stream-title" class="text-xl font-semibold truncate max-w-md"></h3>
+                                    <div class="flex items-center mt-1">
+                                        <div class="w-8 h-8 rounded-full bg-slate-700 mr-2 overflow-hidden">
+                                            <img id="streamer-avatar" class="w-full h-full object-cover" src="" alt="">
+                                        </div>
+                                        <span id="streamer-name" class="font-medium"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center bg-slate-700 px-3 py-1 rounded-full">
+                                    <i class="fas fa-eye mr-2 text-gray-300"></i>
+                                    <span id="viewer-count" class="font-medium"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section - All Live Streams -->
+        <div class="mt-10">
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+                <h2 class="text-2xl font-semibold mb-6">All Live Streams</h2>
+                
+                <div id="all-streams-container">
+                    <div id="no-streams-message" class="text-center py-10">
+                        <div class="text-gray-500 mb-4">
+                            <i class="fas fa-users text-5xl"></i>
+                        </div>
+                        <h3 class="text-xl font-medium mb-2">No live streams found</h3>
+                        <p class="text-gray-400">
+                            When your tracked streamers go live, they'll appear here.
+                        </p>
+                    </div>
+
+                    <div id="streams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 hidden">
+                        <!-- Live streams will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const streamerInput = document.getElementById('streamer-input');
+            const addStreamerBtn = document.getElementById('add-streamer-btn');
+            const streamerList = document.getElementById('streamer-list');
+            const noStreamersMessage = document.getElementById('no-streamers-message');
+            const refreshIntervalSelect = document.getElementById('refresh-interval');
+            const refreshNowBtn = document.getElementById('refresh-now-btn');
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const lastUpdated = document.getElementById('last-updated');
+            const noLiveStream = document.getElementById('no-live-stream');
+            const liveStreamDisplay = document.getElementById('live-stream-display');
+            const streamEmbed = document.getElementById('stream-embed');
+            const streamTitle = document.getElementById('stream-title');
+            const streamerName = document.getElementById('streamer-name');
+            const streamerAvatar = document.getElementById('streamer-avatar');
+            const viewerCount = document.getElementById('viewer-count');
+            const noStreamsMessage = document.getElementById('no-streams-message');
+            const streamsGrid = document.getElementById('streams-grid');
+
+            // State
+            let streamers = JSON.parse(localStorage.getItem('kick-streamers')) || [];
+            let liveStreams = [];
+            let currentTopStream = null;
+            let refreshInterval = 30 * 60 * 1000; // 30 minutes in milliseconds
+            let refreshTimer = null;
+            let isChecking = false;
+
+            // Initialize
+            updateStreamerList();
+            checkStreams();
+            setupRefreshTimer();
+
+            // Event Listeners
+            addStreamerBtn.addEventListener('click', addStreamer);
+            streamerInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') addStreamer();
+            });
+            refreshIntervalSelect.addEventListener('change', updateRefreshInterval);
+            refreshNowBtn.addEventListener('click', function() {
+                clearTimeout(refreshTimer);
+                checkStreams();
+            });
+
+            // Functions
+            function addStreamer() {
+                const username = streamerInput.value.trim().toLowerCase();
+                if (!username) return;
+
+                // Check if already exists
+                if (streamers.includes(username)) {
+                    showNotification('Streamer already added!', 'warning');
+                    return;
+                }
+
+                streamers.push(username);
+                saveStreamers();
+                updateStreamerList();
+                streamerInput.value = '';
+                showNotification('Streamer added successfully!', 'success');
+                
+                // Check if this new streamer is live
+                checkSingleStreamer(username);
+            }
+
+            function removeStreamer(username) {
+                streamers = streamers.filter(s => s !== username);
+                saveStreamers();
+                updateStreamerList();
+                showNotification('Streamer removed!', 'info');
+                
+                // If this was the current top stream, find a new one
+                if (currentTopStream && currentTopStream.streamer === username) {
+                    findTopStream();
+                }
+            }
+
+            function saveStreamers() {
+                localStorage.setItem('kick-streamers', JSON.stringify(streamers));
+            }
+
+            function updateStreamerList() {
+                if (streamers.length === 0) {
+                    noStreamersMessage.classList.remove('hidden');
+                    streamerList.innerHTML = '';
+                    return;
+                }
+
+                noStreamersMessage.classList.add('hidden');
+                streamerList.innerHTML = '';
+
+                streamers.forEach(username => {
+                    const streamerItem = document.createElement('div');
+                    streamerItem.className = 'flex justify-between items-center bg-slate-700 p-3 rounded-lg';
+                    
+                    streamerItem.innerHTML = `
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 rounded-full bg-slate-600 mr-3 flex items-center justify-center">
+                                <i class="fas fa-user text-sm"></i>
+                            </div>
+                            <span class="font-medium">${username}</span>
+                        </div>
+                        <button class="text-red-400 hover:text-red-300 transition-colors remove-streamer" data-username="${username}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    
+                    streamerList.appendChild(streamerItem);
+                });
+
+                // Add event listeners to remove buttons
+                document.querySelectorAll('.remove-streamer').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        removeStreamer(this.dataset.username);
+                    });
+                });
+            }
+
+            async function checkStreams() {
+                if (isChecking || streamers.length === 0) return;
+                
+                isChecking = true;
+                updateStatus('Checking streams...', 'yellow');
+                
+                try {
+                    // Check all streamers in parallel
+                    const results = await Promise.all(
+                        streamers.map(username => checkSingleStreamer(username))
+                    );
+                    
+                    // Filter out null results (offline streamers)
+                    liveStreams = results.filter(stream => stream !== null);
+                    
+                    if (liveStreams.length > 0) {
+                        findTopStream();
+                        updateAllStreamsDisplay();
+                        showNotification(`Found ${liveStreams.length} live streams!`, 'success');
+                    } else {
+                        currentTopStream = null;
+                        noLiveStream.classList.remove('hidden');
+                        liveStreamDisplay.classList.add('hidden');
+                        noStreamsMessage.classList.remove('hidden');
+                        streamsGrid.classList.add('hidden');
+                        showNotification('No live streams found', 'info');
+                    }
+                    
+                    updateLastUpdated();
+                } catch (error) {
+                    console.error('Error checking streams:', error);
+                    showNotification('Error checking streams', 'error');
+                } finally {
+                    isChecking = false;
+                    updateStatus('Active', 'green');
+                    setupRefreshTimer();
+                }
+            }
+
+            async function checkSingleStreamer(username) {
+                try {
+                    // Note: In a real app, you would use Kick's API or a proxy server
+                    // This is a mock implementation for demonstration
+                    
+                    // Mock response - in reality you would fetch from Kick API
+                    const mockLiveChance = 0.5; // 50% chance a streamer is "live"
+                    const isLive = Math.random() < mockLiveChance;
+                    
+                    if (!isLive) return null;
+                    
+                    // Generate mock data
+                    const mockViewers = Math.floor(Math.random() * 50000) + 100;
+                    const mockTitle = `Playing ${['Valorant', 'Just Chatting', 'Minecraft', 'CS:GO', 'Fortnite'][Math.floor(Math.random() * 5)]}`;
+                    
+                    return {
+                        streamer: username,
+                        title: mockTitle,
+                        viewers: mockViewers,
+                        thumbnail: `https://placehold.co/400x225/1e293b/ffffff?text=${username}`,
+                        avatar: `https://placehold.co/100/1e293b/ffffff?text=${username.charAt(0).toUpperCase()}`,
+                        embedUrl: `https://player.kick.com/${username}`
+                    };
+                } catch (error) {
+                    console.error(`Error checking ${username}:`, error);
+                    return null;
+                }
+            }
+
+            function findTopStream() {
+                if (liveStreams.length === 0) {
+                    currentTopStream = null;
+                    return;
+                }
+                
+                // Find stream with highest viewer count
+                const topStream = liveStreams.reduce((prev, current) => 
+                    prev.viewers > current.viewers ? prev : current
+                );
+                
+                // Only update if it's a different stream or first time
+                if (!currentTopStream || currentTopStream.streamer !== topStream.streamer) {
+                    currentTopStream = topStream;
+                    updateCurrentStreamDisplay();
+                }
+            }
+
+            function updateCurrentStreamDisplay() {
+                if (!currentTopStream) return;
+                
+                noLiveStream.classList.add('hidden');
+                liveStreamDisplay.classList.remove('hidden');
+                
+                streamEmbed.src = currentTopStream.embedUrl;
+                streamTitle.textContent = currentTopStream.title;
+                streamerName.textContent = currentTopStream.streamer;
+                streamerAvatar.src = currentTopStream.avatar;
+                viewerCount.textContent = currentTopStream.viewers.toLocaleString();
+                
+                // Add animation
+                liveStreamDisplay.classList.add('fade-in');
+                setTimeout(() => {
+                    liveStreamDisplay.classList.remove('fade-in');
+                }, 500);
+            }
+
+            function updateAllStreamsDisplay() {
+                if (liveStreams.length === 0) {
+                    noStreamsMessage.classList.remove('hidden');
+                    streamsGrid.classList.add('hidden');
+                    return;
+                }
+                
+                noStreamsMessage.classList.add('hidden');
+                streamsGrid.classList.remove('hidden');
+                streamsGrid.innerHTML = '';
+                
+                // Sort by viewer count descending
+                const sortedStreams = [...liveStreams].sort((a, b) => b.viewers - a.viewers);
+                
+                sortedStreams.forEach(stream => {
+                    const isCurrent = currentTopStream && currentTopStream.streamer === stream.streamer;
+                    
+                    const streamCard = document.createElement('div');
+                    streamCard.className = `stream-card bg-slate-700 rounded-lg overflow-hidden ${isCurrent ? 'border-2 border-emerald-500 pulse' : ''}`;
+                    
+                    streamCard.innerHTML = `
+                        <div class="relative">
+                            <img src="${stream.thumbnail}" alt="${stream.streamer}" class="w-full h-40 object-cover">
+                            <div class="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-white mr-1"></span>
+                                LIVE
+                            </div>
+                            <div class="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-sm px-2 py-1 rounded-full flex items-center">
+                                <i class="fas fa-eye mr-1"></i>
+                                ${stream.viewers.toLocaleString()}
+                            </div>
+                        </div>
+                        <div class="p-3">
+                            <h3 class="font-semibold truncate">${stream.title}</h3>
+                            <div class="flex items-center mt-2">
+                                <img src="${stream.avatar}" alt="${stream.streamer}" class="w-6 h-6 rounded-full mr-2">
+                                <span class="text-sm">${stream.streamer}</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    streamCard.addEventListener('click', () => {
+                        // Set this as the current top stream
+                        currentTopStream = stream;
+                        updateCurrentStreamDisplay();
+                        
+                        // Update pulse effect on cards
+                        document.querySelectorAll('.stream-card').forEach(card => {
+                            card.classList.remove('pulse', 'border-emerald-500');
+                        });
+                        streamCard.classList.add('pulse', 'border-emerald-500');
+                    });
+                    
+                    streamsGrid.appendChild(streamCard);
+                });
+            }
+
+            function updateRefreshInterval() {
+                const minutes = parseInt(refreshIntervalSelect.value);
+                refreshInterval = minutes * 60 * 1000;
+                setupRefreshTimer();
+                showNotification(`Refresh interval set to ${minutes} minutes`, 'info');
+            }
+
+            function setupRefreshTimer() {
+                clearTimeout(refreshTimer);
+                refreshTimer = setTimeout(() => {
+                    checkStreams();
+                }, refreshInterval);
+            }
+
+            function updateStatus(text, color) {
+                statusText.textContent = text;
+                
+                // Update indicator color
+                statusIndicator.className = `w-2 h-2 rounded-full mr-2 ${{
+                    'green': 'bg-emerald-500',
+                    'yellow': 'bg-yellow-500',
+                    'red': 'bg-red-500'
+                }[color] || 'bg-gray-500'}`;
+            }
+
+            function updateLastUpdated() {
+                const now = new Date();
+                lastUpdated.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+            }
+
+            function showNotification(message, type) {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center ${
+                    type === 'success' ? 'bg-emerald-600' : 
+                    type === 'error' ? 'bg-red-600' : 
+                    type === 'warning' ? 'bg-yellow-600' : 
+                    'bg-slate-700'
+                }`;
+                
+                let icon;
+                switch (type) {
+                    case 'success': icon = 'fa-check-circle'; break;
+                    case 'error': icon = 'fa-exclamation-circle'; break;
+                    case 'warning': icon = 'fa-exclamation-triangle'; break;
+                    default: icon = 'fa-info-circle';
+                }
+                
+                notification.innerHTML = `
+                    <i class="fas ${icon} mr-2"></i>
+                    <span>${message}</span>
+                `;
+                
+                document.body.appendChild(notification);
+                
+                // Auto-remove after 3 seconds
+                setTimeout(() => {
+                    notification.classList.add('opacity-0', 'transition-opacity', 'duration-300');
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>
