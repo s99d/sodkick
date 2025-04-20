@@ -58,6 +58,32 @@
             50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
+        
+        .chat-message {
+            animation: chatMessage 0.3s ease-out;
+        }
+        
+        @keyframes chatMessage {
+            from {
+                transform: translateY(10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .chat-container {
+            height: 400px;
+        }
+        
+        @media (min-width: 1024px) {
+            .chat-container {
+                height: 100%;
+                min-height: 500px;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
@@ -67,8 +93,53 @@
             <p class="text-gray-400">Automatically watches the most popular stream from your list</p>
         </header>
         
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Chat Column -->
+            <div class="lg:col-span-1 order-1 lg:order-1">
+                <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden h-full flex flex-col">
+                    <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                        <h2 class="text-lg font-bold flex items-center">
+                            <i class="fas fa-comments mr-2 text-indigo-400"></i> Live Chat
+                        </h2>
+                        <div class="flex items-center">
+                            <span id="chat-status" class="w-2 h-2 rounded-full bg-gray-500 mr-2"></span>
+                            <span class="text-xs text-gray-400">Connecting...</span>
+                        </div>
+                    </div>
+                    
+                    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 chat-container">
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-comment-slash text-3xl mb-2"></i>
+                            <p>Chat will appear here when watching a stream</p>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 border-t border-gray-700">
+                        <div class="flex items-center">
+                            <input 
+                                type="text" 
+                                id="chat-input" 
+                                placeholder="Type a message..." 
+                                class="bg-gray-700 text-white px-4 py-2 rounded-l-lg flex-grow focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                disabled
+                            >
+                            <button 
+                                id="send-chat" 
+                                class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-r-lg disabled:opacity-50"
+                                disabled
+                            >
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">
+                            Sign in to Kick to participate in chat
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stream Column -->
+            <div class="lg:col-span-2 order-2 lg:order-2">
                 <div id="stream-container" class="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
                     <div id="no-stream" class="flex flex-col items-center justify-center p-8 text-center" style="min-height: 400px;">
                         <i class="fas fa-tv text-6xl text-gray-600 mb-4"></i>
@@ -116,7 +187,8 @@
                 </div>
             </div>
             
-            <div class="lg:col-span-1">
+            <!-- Channels Column -->
+            <div class="lg:col-span-1 order-3 lg:order-3">
                 <div class="bg-gray-800 rounded-lg shadow-lg p-6">
                     <h2 class="text-xl font-bold mb-4 flex items-center">
                         <i class="fas fa-users mr-2"></i> Your Channels
@@ -181,12 +253,80 @@
             const statusIndicator = document.getElementById('status-indicator');
             const currentWatching = document.getElementById('current-watching');
             
+            // Chat elements
+            const chatMessages = document.getElementById('chat-messages');
+            const chatInput = document.getElementById('chat-input');
+            const sendChatBtn = document.getElementById('send-chat');
+            const chatStatus = document.getElementById('chat-status');
+            
             // Variables
             let channels = JSON.parse(localStorage.getItem('kick_channels')) || [];
             let currentStream = null;
             let checkInterval = null;
             let countdownInterval = null;
             let timeUntilNextCheck = 30 * 60; // 30 minutes in seconds
+            let chatSocket = null;
+            let mockChatInterval = null;
+            
+            // Mock chat messages for demo
+            const mockMessages = [
+                {
+                    username: "xqc",
+                    message: "POGGERS in the chat!",
+                    color: "#FF4500",
+                    isSubscriber: true,
+                    isModerator: false
+                },
+                {
+                    username: "pokimane",
+                    message: "Hi everyone! Thanks for watching <3",
+                    color: "#FF69B4",
+                    isSubscriber: false,
+                    isModerator: false
+                },
+                {
+                    username: "ninja",
+                    message: "Let's get this W!",
+                    color: "#00BFFF",
+                    isSubscriber: true,
+                    isModerator: true
+                },
+                {
+                    username: "shroud",
+                    message: "That was insane...",
+                    color: "#32CD32",
+                    isSubscriber: false,
+                    isModerator: false
+                },
+                {
+                    username: "timthetatman",
+                    message: "LUL can't believe that just happened",
+                    color: "#FFD700",
+                    isSubscriber: true,
+                    isModerator: false
+                },
+                {
+                    username: "drlupo",
+                    message: "GG everyone!",
+                    color: "#9370DB",
+                    isSubscriber: false,
+                    isModerator: true
+                },
+                {
+                    username: "summit1g",
+                    message: "Chat moving so fast no one will see this",
+                    color: "#FF6347",
+                    isSubscriber: true,
+                    isModerator: false
+                },
+                {
+                    username: "lirik",
+                    message: "POGCHAMP",
+                    color: "#1E90FF",
+                    isSubscriber: false,
+                    isModerator: false
+                }
+            ];
             
             // Initialize
             renderChannelsList();
@@ -196,6 +336,11 @@
             addChannelBtn.addEventListener('click', addChannel);
             channelInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') addChannel();
+            });
+            
+            sendChatBtn.addEventListener('click', sendChatMessage);
+            chatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') sendChatMessage();
             });
             
             // Functions
@@ -405,6 +550,9 @@
                 `;
                 
                 currentStream = stream;
+                
+                // Connect to chat (mock for this demo)
+                connectToChat(stream.channel_name);
             }
             
             function clearStream() {
@@ -413,6 +561,9 @@
                 streamInfo.classList.add('hidden');
                 currentStream = null;
                 streamVideo.innerHTML = '';
+                
+                // Disconnect from chat
+                disconnectFromChat();
             }
             
             function updateStatus(text, color) {
@@ -476,6 +627,105 @@
                 if (checkInterval) clearInterval(checkInterval);
                 if (countdownInterval) clearInterval(countdownInterval);
                 updateStatus('Auto-viewer stopped', 'gray');
+            }
+            
+            // Chat functions
+            function connectToChat(channelName) {
+                // In a real implementation, this would connect to Kick's chat server
+                // For this demo, we'll simulate chat with random messages
+                
+                disconnectFromChat();
+                
+                // Update chat UI
+                chatMessages.innerHTML = '';
+                chatStatus.classList.remove('bg-gray-500', 'bg-green-500', 'bg-red-500');
+                chatStatus.classList.add('bg-green-500');
+                
+                // Add welcome message
+                addChatMessage({
+                    username: 'System',
+                    message: `Connected to ${channelName}'s chat`,
+                    color: '#4F46E5',
+                    isSubscriber: false,
+                    isModerator: true
+                });
+                
+                // Start mock chat messages
+                mockChatInterval = setInterval(() => {
+                    const randomMessage = mockMessages[Math.floor(Math.random() * mockMessages.length)];
+                    addChatMessage(randomMessage);
+                }, 2000 + Math.random() * 3000); // Random interval between 2-5 seconds
+                
+                // Enable chat input (though it won't actually send in this demo)
+                chatInput.disabled = false;
+                chatInput.placeholder = `Message ${channelName}'s chat...`;
+                sendChatBtn.disabled = false;
+            }
+            
+            function disconnectFromChat() {
+                if (mockChatInterval) clearInterval(mockChatInterval);
+                
+                // Update chat UI
+                chatStatus.classList.remove('bg-gray-500', 'bg-green-500', 'bg-red-500');
+                chatStatus.classList.add('bg-gray-500');
+                
+                // Disable chat input
+                chatInput.disabled = true;
+                chatInput.placeholder = 'Type a message...';
+                sendChatBtn.disabled = true;
+                
+                // Clear chat if no stream is selected
+                if (!currentStream) {
+                    chatMessages.innerHTML = `
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-comment-slash text-3xl mb-2"></i>
+                            <p>Chat will appear here when watching a stream</p>
+                        </div>
+                    `;
+                }
+            }
+            
+            function addChatMessage(msg) {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'chat-message bg-gray-700 rounded-lg p-3';
+                
+                // Create badge elements based on user status
+                let badges = '';
+                if (msg.isModerator) {
+                    badges += '<span class="bg-green-600 text-white text-xs px-1 rounded mr-1">MOD</span>';
+                }
+                if (msg.isSubscriber) {
+                    badges += '<span class="bg-purple-600 text-white text-xs px-1 rounded mr-1">SUB</span>';
+                }
+                
+                messageElement.innerHTML = `
+                    <div class="flex items-start">
+                        <span class="font-bold mr-2" style="color: ${msg.color}">${msg.username}</span>
+                        ${badges}
+                    </div>
+                    <div class="mt-1 text-gray-200">${msg.message}</div>
+                `;
+                
+                chatMessages.appendChild(messageElement);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            function sendChatMessage() {
+                const message = chatInput.value.trim();
+                if (!message || !currentStream) return;
+                
+                // In a real implementation, this would send the message to Kick's chat server
+                // For this demo, we'll just add it to the chat as our own message
+                addChatMessage({
+                    username: 'You',
+                    message: message,
+                    color: '#4F46E5',
+                    isSubscriber: true,
+                    isModerator: false
+                });
+                
+                // Clear input
+                chatInput.value = '';
             }
         });
     </script>
