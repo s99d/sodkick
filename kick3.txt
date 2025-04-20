@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kick Stream Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 9999;
+            background-color: black;
+        }
+        
+        .channel-item:hover .remove-channel {
+            opacity: 1;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4f46e5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-indigo-500 mb-2">Kick Stream Viewer</h1>
+            <p class="text-gray-400">Automatically watch the most popular live stream from your selected channels</p>
+        </header>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <div id="stream-container" class="bg-gray-800 rounded-lg overflow-hidden shadow-lg aspect-video">
+                    <div id="no-stream" class="flex flex-col items-center justify-center h-full p-8 text-center">
+                        <i class="fas fa-tv text-6xl text-gray-600 mb-4"></i>
+                        <h3 class="text-2xl font-semibold text-gray-400 mb-2">No Live Streams</h3>
+                        <p class="text-gray-500">Add some channels below and we'll automatically show the most popular live stream</p>
+                    </div>
+                    <iframe id="stream-embed" class="w-full h-full hidden" frameborder="0" allowfullscreen></iframe>
+                </div>
+                
+                <div id="stream-info" class="mt-4 bg-gray-800 rounded-lg p-4 hidden">
+                    <div class="flex items-center">
+                        <img id="streamer-avatar" src="" class="w-12 h-12 rounded-full mr-4" alt="Streamer Avatar">
+                        <div>
+                            <h3 id="stream-title" class="font-bold text-lg"></h3>
+                            <div class="flex items-center text-gray-400">
+                                <span id="streamer-name" class="mr-3"></span>
+                                <span id="viewer-count" class="flex items-center">
+                                    <i class="fas fa-eye mr-1"></i>
+                                    <span></span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-between items-center">
+                        <div class="text-sm text-gray-400">
+                            Next check in: <span id="refresh-timer">30:00</span>
+                        </div>
+                        <button id="refresh-now" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg flex items-center">
+                            <i class="fas fa-sync-alt mr-2"></i> Refresh Now
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="lg:col-span-1">
+                <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-bold mb-4 flex items-center">
+                        <i class="fas fa-users mr-2"></i> Your Channels
+                    </h2>
+                    
+                    <div class="mb-4 flex">
+                        <input type="text" id="channel-input" placeholder="Add Kick channel (e.g. xqc)" class="bg-gray-700 text-white px-4 py-2 rounded-l-lg flex-grow focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button id="add-channel" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-r-lg">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="channels-list" class="max-h-96 overflow-y-auto">
+                        <p id="no-channels" class="text-gray-500 text-center py-4">No channels added yet</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-800 rounded-lg shadow-lg p-6 mt-6">
+                    <h2 class="text-xl font-bold mb-4 flex items-center">
+                        <i class="fas fa-cog mr-2"></i> Settings
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="flex items-center cursor-pointer">
+                                <div class="relative">
+                                    <input type="checkbox" id="auto-fullscreen" class="sr-only" checked>
+                                    <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                                </div>
+                                <div class="ml-3 text-gray-300 font-medium">
+                                    Auto Fullscreen
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div>
+                            <label class="flex items-center cursor-pointer">
+                                <div class="relative">
+                                    <input type="checkbox" id="auto-unmute" class="sr-only" checked>
+                                    <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                                </div>
+                                <div class="ml-3 text-gray-300 font-medium">
+                                    Auto Unmute
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div>
+                            <label class="flex items-center cursor-pointer">
+                                <div class="relative">
+                                    <input type="checkbox" id="auto-refresh" class="sr-only" checked>
+                                    <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                                </div>
+                                <div class="ml-3 text-gray-300 font-medium">
+                                    Auto Refresh (30 min)
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const channelInput = document.getElementById('channel-input');
+            const addChannelBtn = document.getElementById('add-channel');
+            const channelsList = document.getElementById('channels-list');
+            const noChannelsMsg = document.getElementById('no-channels');
+            const streamContainer = document.getElementById('stream-container');
+            const noStreamMsg = document.getElementById('no-stream');
+            const streamEmbed = document.getElementById('stream-embed');
+            const streamInfo = document.getElementById('stream-info');
+            const streamTitle = document.getElementById('stream-title');
+            const streamerName = document.getElementById('streamer-name');
+            const streamerAvatar = document.getElementById('streamer-avatar');
+            const viewerCount = document.getElementById('viewer-count');
+            const refreshTimer = document.getElementById('refresh-timer');
+            const refreshNowBtn = document.getElementById('refresh-now');
+            
+            // Settings toggles
+            const autoFullscreen = document.getElementById('auto-fullscreen');
+            const autoUnmute = document.getElementById('auto-unmute');
+            const autoRefresh = document.getElementById('auto-refresh');
+            
+            // Variables
+            let channels = JSON.parse(localStorage.getItem('kick_channels')) || [];
+            let currentStream = null;
+            let refreshInterval;
+            let timerInterval;
+            let timeLeft = 30 * 60; // 30 minutes in seconds
+            
+            // Initialize
+            renderChannelsList();
+            checkStreams();
+            startTimer();
+            
+            // Event listeners
+            addChannelBtn.addEventListener('click', addChannel);
+            channelInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') addChannel();
+            });
+            
+            refreshNowBtn.addEventListener('click', function() {
+                resetTimer();
+                checkStreams();
+            });
+            
+            // Toggle switches
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const dot = this.nextElementSibling.querySelector('.dot');
+                    if (this.checked) {
+                        dot.style.transform = 'translateX(100%)';
+                        dot.style.backgroundColor = '#4f46e5';
+                        this.nextElementSibling.style.backgroundColor = '#4f46e5';
+                    } else {
+                        dot.style.transform = 'translateX(0)';
+                        dot.style.backgroundColor = '#ffffff';
+                        this.nextElementSibling.style.backgroundColor = '#4b5563';
+                    }
+                    
+                    // Handle specific toggles
+                    if (this.id === 'auto-fullscreen' && this.checked && currentStream) {
+                        enterFullscreen();
+                    }
+                    
+                    if (this.id === 'auto-refresh') {
+                        if (this.checked) {
+                            startTimer();
+                        } else {
+                            clearInterval(timerInterval);
+                        }
+                    }
+                });
+                
+                // Initialize toggle states
+                if (checkbox.checked) {
+                    const dot = checkbox.nextElementSibling.querySelector('.dot');
+                    dot.style.transform = 'translateX(100%)';
+                    dot.style.backgroundColor = '#4f46e5';
+                    checkbox.nextElementSibling.style.backgroundColor = '#4f46e5';
+                }
+            });
+            
+            // Functions
+            function addChannel() {
+                const channelName = channelInput.value.trim().toLowerCase();
+                if (!channelName) return;
+                
+                if (!channels.includes(channelName)) {
+                    channels.push(channelName);
+                    saveChannels();
+                    renderChannelsList();
+                    channelInput.value = '';
+                    
+                    // Check if this new channel is live
+                    checkSingleChannel(channelName);
+                }
+            }
+            
+            function removeChannel(channelName) {
+                channels = channels.filter(ch => ch !== channelName);
+                saveChannels();
+                renderChannelsList();
+                
+                // If the removed channel was the current stream, find a new one
+                if (currentStream && currentStream.user.username.toLowerCase() === channelName) {
+                    checkStreams();
+                }
+            }
+            
+            function saveChannels() {
+                localStorage.setItem('kick_channels', JSON.stringify(channels));
+            }
+            
+            function renderChannelsList() {
+                if (channels.length === 0) {
+                    noChannelsMsg.classList.remove('hidden');
+                    channelsList.innerHTML = '';
+                    return;
+                }
+                
+                noChannelsMsg.classList.add('hidden');
+                channelsList.innerHTML = '';
+                
+                channels.forEach(channel => {
+                    const channelItem = document.createElement('div');
+                    channelItem.className = 'channel-item bg-gray-700 rounded-lg p-3 mb-2 flex justify-between items-center hover:bg-gray-600 transition';
+                    
+                    channelItem.innerHTML = `
+                        <div class="flex items-center">
+                            <i class="fas fa-user mr-3 text-gray-400"></i>
+                            <span class="font-medium">${channel}</span>
+                        </div>
+                        <button class="remove-channel opacity-0 hover:opacity-100 text-red-400 hover:text-red-300 transition" data-channel="${channel}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    
+                    channelsList.appendChild(channelItem);
+                    
+                    // Add event listener to remove button
+                    channelItem.querySelector('.remove-channel').addEventListener('click', function() {
+                        removeChannel(this.dataset.channel);
+                    });
+                });
+            }
+            
+            async function checkStreams() {
+                if (channels.length === 0) {
+                    showNoStream();
+                    return;
+                }
+                
+                let liveStreams = [];
+                
+                // Check each channel for live status
+                for (const channel of channels) {
+                    try {
+                        const stream = await checkSingleChannel(channel);
+                        if (stream) {
+                            liveStreams.push(stream);
+                        }
+                    } catch (error) {
+                        console.error(`Error checking channel ${channel}:`, error);
+                    }
+                }
+                
+                if (liveStreams.length === 0) {
+                    showNoStream();
+                    return;
+                }
+                
+                // Find the stream with highest viewer count
+                const topStream = liveStreams.reduce((prev, current) => 
+                    (prev.viewer_count > current.viewer_count) ? prev : current
+                );
+                
+                // Only update if it's a different stream
+                if (!currentStream || currentStream.id !== topStream.id) {
+                    currentStream = topStream;
+                    displayStream(topStream);
+                }
+            }
+            
+            async function checkSingleChannel(channel) {
+                try {
+                    // Using Kick's unofficial API endpoint
+                    const response = await fetch(`https://kick.com/api/v2/channels/${channel}`);
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            console.log(`Channel ${channel} not found`);
+                        }
+                        return null;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.livestream) {
+                        return {
+                            id: data.livestream.id,
+                            title: data.livestream.session_title,
+                            viewer_count: data.livestream.viewer_count,
+                            user: {
+                                username: data.user.username,
+                                profile_pic: data.user.profile_pic
+                            }
+                        };
+                    }
+                    
+                    return null;
+                } catch (error) {
+                    console.error(`Error checking channel ${channel}:`, error);
+                    return null;
+                }
+            }
+            
+            function displayStream(stream) {
+                noStreamMsg.classList.add('hidden');
+                streamEmbed.classList.remove('hidden');
+                streamInfo.classList.remove('hidden');
+                
+                // Update stream info
+                streamTitle.textContent = stream.title;
+                streamerName.textContent = stream.user.username;
+                viewerCount.querySelector('span').textContent = stream.viewer_count.toLocaleString();
+                streamerAvatar.src = stream.user.profile_pic || 'https://kick.com/assets/avatars/default-avatar.png';
+                
+                // Update embed
+                const embedUrl = `https://player.kick.com/${stream.user.username}?autoplay=true&muted=false`;
+                streamEmbed.src = embedUrl;
+                
+                // Enter fullscreen if enabled
+                if (autoFullscreen.checked) {
+                    enterFullscreen();
+                }
+            }
+            
+            function showNoStream() {
+                noStreamMsg.classList.remove('hidden');
+                streamEmbed.classList.add('hidden');
+                streamInfo.classList.add('hidden');
+                currentStream = null;
+                
+                // Exit fullscreen if no stream
+                exitFullscreen();
+            }
+            
+            function enterFullscreen() {
+                if (!document.fullscreenElement) {
+                    streamContainer.classList.add('fullscreen');
+                    streamContainer.requestFullscreen().catch(err => {
+                        console.error('Error attempting to enable fullscreen:', err);
+                    });
+                }
+            }
+            
+            function exitFullscreen() {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                    streamContainer.classList.remove('fullscreen');
+                }
+            }
+            
+            function startTimer() {
+                clearInterval(timerInterval);
+                timeLeft = 30 * 60; // Reset to 30 minutes
+                updateTimerDisplay();
+                
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    
+                    if (timeLeft <= 0) {
+                        resetTimer();
+                        checkStreams();
+                    }
+                }, 1000);
+            }
+            
+            function resetTimer() {
+                clearInterval(timerInterval);
+                startTimer();
+            }
+            
+            function updateTimerDisplay() {
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                refreshTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // Check streams every 30 minutes if auto-refresh is enabled
+            refreshInterval = setInterval(() => {
+                if (autoRefresh.checked) {
+                    checkStreams();
+                }
+            }, 30 * 60 * 1000);
+            
+            // Handle fullscreen change events
+            document.addEventListener('fullscreenchange', function() {
+                if (!document.fullscreenElement) {
+                    streamContainer.classList.remove('fullscreen');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
