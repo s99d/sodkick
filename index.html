@@ -41,6 +41,26 @@
             background: #4f46e5;
             border-radius: 4px;
         }
+        
+        /* Video controls styling */
+        video::-webkit-media-controls {
+            display: none !important;
+        }
+        
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            padding: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .video-container:hover .custom-controls {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
@@ -52,13 +72,28 @@
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2">
-                <div id="stream-container" class="bg-gray-800 rounded-lg overflow-hidden shadow-lg aspect-video">
+                <div id="stream-container" class="bg-gray-800 rounded-lg overflow-hidden shadow-lg aspect-video relative video-container">
                     <div id="no-stream" class="flex flex-col items-center justify-center h-full p-8 text-center">
                         <i class="fas fa-tv text-6xl text-gray-600 mb-4"></i>
                         <h3 class="text-2xl font-semibold text-gray-400 mb-2">No Live Streams</h3>
                         <p class="text-gray-500">Add some channels below and we'll automatically show the most popular live stream</p>
                     </div>
-                    <iframe id="stream-embed" class="w-full h-full hidden" frameborder="0" allowfullscreen></iframe>
+                    <video id="stream-video" class="w-full h-full hidden" autoplay playsinline></video>
+                    <div class="custom-controls hidden">
+                        <div class="flex items-center justify-between">
+                            <button id="play-pause" class="text-white hover:text-indigo-400">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                            <div class="flex items-center space-x-4">
+                                <button id="mute-unmute" class="text-white hover:text-indigo-400">
+                                    <i class="fas fa-volume-up"></i>
+                                </button>
+                                <button id="fullscreen-btn" class="text-white hover:text-indigo-400">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div id="stream-info" class="mt-4 bg-gray-800 rounded-lg p-4 hidden">
@@ -163,7 +198,7 @@
             const noChannelsMsg = document.getElementById('no-channels');
             const streamContainer = document.getElementById('stream-container');
             const noStreamMsg = document.getElementById('no-stream');
-            const streamEmbed = document.getElementById('stream-embed');
+            const streamVideo = document.getElementById('stream-video');
             const streamInfo = document.getElementById('stream-info');
             const streamTitle = document.getElementById('stream-title');
             const streamerName = document.getElementById('streamer-name');
@@ -171,6 +206,10 @@
             const viewerCount = document.getElementById('viewer-count');
             const refreshTimer = document.getElementById('refresh-timer');
             const refreshNowBtn = document.getElementById('refresh-now');
+            const playPauseBtn = document.getElementById('play-pause');
+            const muteUnmuteBtn = document.getElementById('mute-unmute');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            const customControls = document.querySelector('.custom-controls');
             
             // Settings toggles
             const autoFullscreen = document.getElementById('auto-fullscreen');
@@ -183,6 +222,7 @@
             let refreshInterval;
             let timerInterval;
             let timeLeft = 30 * 60; // 30 minutes in seconds
+            let hlsPlayer = null;
             
             // Initialize
             renderChannelsList();
@@ -198,6 +238,27 @@
             refreshNowBtn.addEventListener('click', function() {
                 resetTimer();
                 checkStreams();
+            });
+            
+            // Video controls
+            playPauseBtn.addEventListener('click', togglePlayPause);
+            muteUnmuteBtn.addEventListener('click', toggleMute);
+            fullscreenBtn.addEventListener('click', toggleFullscreen);
+            
+            streamVideo.addEventListener('play', function() {
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            });
+            
+            streamVideo.addEventListener('pause', function() {
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            });
+            
+            streamVideo.addEventListener('volumechange', function() {
+                if (streamVideo.muted) {
+                    muteUnmuteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                } else {
+                    muteUnmuteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                }
             });
             
             // Toggle switches
@@ -360,7 +421,8 @@
                             user: {
                                 username: data.user.username,
                                 profile_pic: data.user.profile_pic
-                            }
+                            },
+                            playback_url: data.livestream.playback_url
                         };
                     }
                     
@@ -373,7 +435,8 @@
             
             function displayStream(stream) {
                 noStreamMsg.classList.add('hidden');
-                streamEmbed.classList.remove('hidden');
+                streamVideo.classList.remove('hidden');
+                customControls.classList.remove('hidden');
                 streamInfo.classList.remove('hidden');
                 
                 // Update stream info
@@ -382,24 +445,82 @@
                 viewerCount.querySelector('span').textContent = stream.viewer_count.toLocaleString();
                 streamerAvatar.src = stream.user.profile_pic || 'https://kick.com/assets/avatars/default-avatar.png';
                 
-                // Update embed
-                const embedUrl = `https://player.kick.com/${stream.user.username}?autoplay=true&muted=false`;
-                streamEmbed.src = embedUrl;
+                // Load HLS stream
+                if (hlsPlayer) {
+                    hlsPlayer.destroy();
+                }
                 
-                // Enter fullscreen if enabled
-                if (autoFullscreen.checked) {
-                    enterFullscreen();
+                if (Hls.isSupported()) {
+                    hlsPlayer = new Hls();
+                    hlsPlayer.loadSource(stream.playback_url);
+                    hlsPlayer.attachMedia(streamVideo);
+                    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+                        streamVideo.play();
+                        
+                        // Unmute if setting is enabled
+                        if (autoUnmute.checked) {
+                            streamVideo.muted = false;
+                        }
+                        
+                        // Enter fullscreen if enabled
+                        if (autoFullscreen.checked) {
+                            enterFullscreen();
+                        }
+                    });
+                } else if (streamVideo.canPlayType('application/vnd.apple.mpegurl')) {
+                    // For Safari
+                    streamVideo.src = stream.playback_url;
+                    streamVideo.addEventListener('loadedmetadata', function() {
+                        streamVideo.play();
+                        
+                        if (autoUnmute.checked) {
+                            streamVideo.muted = false;
+                        }
+                        
+                        if (autoFullscreen.checked) {
+                            enterFullscreen();
+                        }
+                    });
                 }
             }
             
             function showNoStream() {
                 noStreamMsg.classList.remove('hidden');
-                streamEmbed.classList.add('hidden');
+                streamVideo.classList.add('hidden');
+                customControls.classList.add('hidden');
                 streamInfo.classList.add('hidden');
                 currentStream = null;
                 
+                // Clean up HLS player
+                if (hlsPlayer) {
+                    hlsPlayer.destroy();
+                    hlsPlayer = null;
+                }
+                
                 // Exit fullscreen if no stream
                 exitFullscreen();
+            }
+            
+            function togglePlayPause() {
+                if (streamVideo.paused) {
+                    streamVideo.play();
+                    playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                } else {
+                    streamVideo.pause();
+                    playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                }
+            }
+            
+            function toggleMute() {
+                streamVideo.muted = !streamVideo.muted;
+            }
+            
+            function toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    enterFullscreen();
+                } else {
+                    exitFullscreen();
+                }
             }
             
             function enterFullscreen() {
@@ -458,6 +579,18 @@
                     streamContainer.classList.remove('fullscreen');
                 }
             });
+            
+            // Load HLS.js library dynamically if needed
+            if (!window.Hls) {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+                script.onload = function() {
+                    if (currentStream) {
+                        displayStream(currentStream);
+                    }
+                };
+                document.head.appendChild(script);
+            }
         });
     </script>
 </body>
