@@ -55,6 +55,7 @@
     <div class="widget"><strong>Time &amp; Date:</strong> <span id="time"></span></div>
     <div class="widget"><strong>Weather (Dammam):</strong> <span id="weather">Loading...</span></div>
     <div class="widget">
+      
       <strong>YouTube subs:</strong>
       <iframe src="https://botrix.live/widgets/goals/followers/?tema=sharp&bid=ouK6Eq2liSoU%2BKQ24j8WDw&platform=youtube&font=Arial&cantidad=300&color=3ea100;ffffff&c=#3ea100#ffffff&texto=" width="350" height="80" frameborder="0" scrolling="no" style="width:350px;height:80px;"></iframe>
     </div>
@@ -67,14 +68,27 @@
   <div id="random-gif" style="position:absolute; bottom:20px; left:20px; width:300px; height:200px;"></div>
   
   <script>
-    // Time
-    function updateTime() {
-      document.getElementById('time').textContent =
-        new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' });
-    }
-    setInterval(updateTime, 1000);
-    updateTime();
-  
+    
+    // Fetch humidity in Dammam using Open-Meteo
+async function fetchHumidity() {
+  try {
+    const response = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=26.42&longitude=50.12&current_weather=true&hourly=relative_humidity_2m&timezone=Asia/Riyadh'
+    );
+    const data = await response.json();
+
+    const currentTime = data.current_weather.time;
+    const humidityList = data.hourly.relative_humidity_2m;
+    const timeList = data.hourly.time;
+    const index = timeList.indexOf(currentTime);
+
+    const humidity = (index !== -1 && humidityList) ? humidityList[index] + '%' : 'N/A';
+    document.getElementById('humidity').textContent = humidity;
+  } catch (e) {
+    document.getElementById('humidity').textContent = 'Err';
+  }
+}
+
     // Weather
     async function fetchWeather() {
       try {
@@ -87,6 +101,28 @@
       }
     }
     fetchWeather(); setInterval(fetchWeather, 1800000);
+    // Fetch humidity in Dammam using Open-Meteo
+async function fetchHumidity() {
+  try {
+    const response = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=26.42&longitude=50.12&current_weather=true&hourly=relative_humidity_2m&timezone=Asia/Riyadh'
+    );
+    const data = await response.json();
+
+    const currentTime = data.current_weather.time;
+    const humidityList = data.hourly.relative_humidity_2m;
+    const timeList = data.hourly.time;
+    const index = timeList.indexOf(currentTime);
+
+    const humidity = (index !== -1 && humidityList) ? humidityList[index] + '%' : 'N/A';
+    document.getElementById('humidity').textContent = humidity;
+  } catch (e) {
+    document.getElementById('humidity').textContent = 'Err';
+  }
+}
+fetchHumidity();
+setInterval(fetchHumidity, 1800000); // Refresh every 30 minutes
+
   
     // Kick
     async function fetchKK() {
@@ -101,7 +137,43 @@
 
 
 
- 
+ async function fetchHumidity() {
+  try {
+    const res = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=26.42&longitude=50.12&current_weather=true&hourly=relative_humidity_2m&timezone=Asia/Riyadh'
+    );
+    const data = await res.json();
+
+    // Get current date in format: "YYYY-MM-DDTHH:00"
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const currentHour = `${yyyy}-${mm}-${dd}T${hh}:00`;
+
+    // Get humidity for current hour
+    const timeIndex = data.hourly.time.indexOf(currentHour);
+    const humidity = (timeIndex !== -1) ? data.hourly.relative_humidity_2m[timeIndex] + '%' : 'N/A';
+
+    let humidityEl = document.getElementById('humidity');
+    if (!humidityEl) {
+      const newWidget = document.createElement('div');
+      newWidget.className = 'widget';
+      newWidget.innerHTML = `<strong>Humidity:</strong> <span id="humidity">${humidity}</span>`;
+      document.getElementById('container')?.appendChild(newWidget);
+    } else {
+      humidityEl.textContent = humidity;
+    }
+  } catch (e) {
+    const el = document.getElementById('humidity');
+    if (el) el.textContent = 'Err';
+  }
+}
+
+fetchHumidity();
+setInterval(fetchHumidity, 1800000); // Update every 30 minutes
+
   </script>
   
 </body>
