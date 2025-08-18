@@ -52,8 +52,8 @@
   <div id="background"></div>
   <div id="donut-container" style="position:absolute; top:20px; right:20px; width:150px; height:150px;"></div>
   <div id="container">
-    <div class="widget"><strong>Weather (Dammam):</strong> <span id="weather">Loading...</span></div>
-    <div class="widget"><strong>Humidity:</strong> <span id="humidity">Loading...</span></div>
+    <div class="widget"><strong>Dammam Weather:</strong> <span id="weather">Loading...</span></div>
+    <div class="widget"><strong>Dammam Humidity:</strong> <span id="humidity">Loading...</span> 💧</div>
     <div class="widget">
       
       <strong>YouTube subs:</strong>
@@ -78,11 +78,25 @@
     async function fetchWeather() {
       try {
         let j = await (await fetch(
-          'https://api.open-meteo.com/v1/forecast?latitude=26.42&longitude=50.12&current_weather=true'
+          'https://api.open-meteo.com/v1/forecast?latitude=26.42&longitude=50.12&current_weather=true&hourly=weathercode'
         )).json();
-        document.getElementById('weather').textContent = j.current_weather.temperature + '°C';
+        
+        const temp = j.current_weather.temperature + '°C';
+        const weatherCode = j.current_weather.weathercode;
+        
+        // Map weather codes to emojis
+        let weatherEmoji = '';
+        if (weatherCode >= 95) weatherEmoji = '⛈️'; // Thunderstorm
+        else if (weatherCode >= 80) weatherEmoji = '🌧️'; // Rain showers
+        else if (weatherCode >= 51) weatherEmoji = '🌦️'; // Drizzle
+        else if (weatherCode >= 45) weatherEmoji = '🌫️'; // Fog
+        else if (weatherCode >= 35) weatherEmoji = '🌬️'; // Dust storm
+        else if (weatherCode >= 1) weatherEmoji = '☁️'; // Cloudy
+        else weatherEmoji = '☀️'; // Clear
+        
+        document.getElementById('weather').textContent = `${temp} ${weatherEmoji}`;
       } catch {
-        document.getElementById('weather').textContent = 'Err';
+        document.getElementById('weather').textContent = '❌ Err';
       }
     }
     fetchWeather(); setInterval(fetchWeather, 1800000);
@@ -113,11 +127,14 @@ setInterval(fetchHumidity, 1800000); // Refresh every 30 minutes
     function updateTime() {
       const now = new Date();
       
-      // Format time (HH:MM:SS)
-      const hours = String(now.getHours()).padStart(2, '0');
+      // Format time (12-hour with AM/PM)
+      let hours = now.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // Convert 0 to 12
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
-      document.getElementById('time').textContent = `${hours}:${minutes}:${seconds}`;
+      document.getElementById('time').textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
       
       // Format date (DD/MM/YYYY)
       const day = String(now.getDate()).padStart(2, '0');
@@ -129,15 +146,27 @@ setInterval(fetchHumidity, 1800000); // Refresh every 30 minutes
     setInterval(updateTime, 1000);
 
     // Kick
-    async function fetchKK() {
+        async function fetchKK() {
       try {
-        let j = await (await fetch('https://kick.com/api/v2/channels/kangjoel')).json();
-        document.getElementById('kk').textContent = j.is_live ? '🟢 LIVE' : '🔴 Offline';
-      } catch {
-        document.getElementById('kk').textContent = 'Err';
+        const res = await fetch('https://kick.com/api/v2/channels/kangjoel');
+        if (!res.ok) throw new Error("Network response not ok");
+        
+        const j = await res.json();
+        const live = j.livestream && j.livestream.is_live;
+        const viewers = live ? (j.livestream.viewer_count || 0) : 0;
+        
+        document.getElementById('kk').textContent = live 
+          ? `🟢 LIVE (${viewers} 👀)` 
+          : '🔴 Offline';
+      } catch (err) {
+        console.error(err);
+        document.getElementById('kk').textContent = '❌ Error';
       }
     }
-    fetchKK(); setInterval(fetchKK, 1800000);
+
+    fetchKK();
+    // refresh every 30 min
+    setInterval(fetchKK, 1800000);
 
 
 
